@@ -1,0 +1,75 @@
+- name: setup servers back-worker
+  hosts: back-workers
+  become: true
+
+  tasks:
+    - name: disable password SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+      notify: restart ssh
+
+    - name: disable root login
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitRootLogin'
+        line: 'PermitRootLogin no'
+      notify: restart ssh
+
+    - name: create admin users
+      user:
+        name: "{{ item }}"
+        groups: sudo
+        append: true
+        shell: /bin/bash
+        create_home: true
+      loop:
+        - admin-1
+        - admin-2
+        - admin-3
+
+    - name: create tech users
+      user:
+        name: "{{ item }}"
+        shell: /bin/bash
+        create_home: true
+      loop:
+        - ansible
+        - autodeploy
+
+    - name: add SSH-keys admin
+      authorized_key:
+        user: "{{ item }}"
+        key: "{{ lookup('file', 'files/id_rsa.pub') }}"
+      loop:
+        - admin-1
+        - admin-2
+        - admin-3
+        - ansible
+        - autodeploy
+
+    - name: install Docker 20.10.21
+      apt:
+        name: docker.io
+        state: present
+        update_cache: true
+
+    - name: install Docker
+      shell: |
+        apt-get install -y docker-ce=5:20.10.21~3-0~ubuntu-focal
+
+    - name: install packages
+      apt:
+        name:
+          - mc
+          - ncdu
+          - cifs-utils
+          - nfs-common
+        state: present
+
+  handlers:
+    - name: restart ssh
+      service:
+        name: ssh
+        state: restarted
